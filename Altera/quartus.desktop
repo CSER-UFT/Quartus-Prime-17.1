@@ -1,0 +1,9 @@
+[Desktop Entry]
+Version=1.0
+Name=Quartus Prime Standard Edition v17.1
+Comment=Quartus Prime design software for Altera FPGA's
+Exec=<INSTALLDIR>/quartus/bin/quartus --64bit
+Icon=<INSTALLDIR>/quartus/adm/quartusii.png
+Terminal=false
+Type=Application
+Categories=Development
