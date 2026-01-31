@@ -1,60 +1,108 @@
 #!/bin/bash
 
-if [ $1-UNSET == -UNSET ]
-then
-	echo "No installation directory defined. Using default /opt/altera/17.1"
-	INSTALLDIR="/opt/altera/17.1"
+# ==========================================
+# Intel FPGA Quartus Prime 17.1 Installer
+# Adaptado para Ubuntu Server 20.04 LTS
+# ==========================================
+
+set -e
+
+# -----------------------------
+# Definir diretório de instalação
+# -----------------------------
+if [ "$1-UNSET" == "-UNSET" ]; then
+    echo "No installation directory defined. Using default /opt/altera/17.1"
+    INSTALLDIR="/opt/altera/17.1"
 else
-	INSTALLDIR=$1
+    INSTALLDIR=$1
 fi
 
-mkdir -p $INSTALLDIR
-rm -rf $INSTALLDIR/*
+sudo mkdir -p "$INSTALLDIR"
+sudo rm -rf "$INSTALLDIR"/*
 
-cd Altera
+cd Altera || { echo "Altera directory not found!"; exit 1; }
 
+# -----------------------------
+# Instala dependências Ubuntu 20.04
+# -----------------------------
 echo "Installing dependencies..."
-dnf install -y -b make libX11.x86_64 libX11.i686 libXau.x86_64 libXau.i686 libXdmcp.x86_64 libXdmcp.i686 libXext.x86_64 libXext.i686 libXft-devel.i686 libXft-devel.x86_64 libXft.x86_64 libXft.i686 libXrender.x86_64 libXrender.i686 libXt.x86_64 libXt.i686 libXtst.x86_64 libXtst.i686 gtk2.i686 gtk2.x86_64 unixODBC.i686 unixODBC.x86_64 unixODBC-devel.i686 unixODBC-devel.x86_64 ncurses.x86_64 ncurses-libs.x86_64 ncurses-libs.i686 ncurses-compat-libs.x86_64 ncurses-compat-libs.i686 zeromq.i686 zeromq.x86_64 libXext.x86_64 libXext.i686 alsa-lib.i686 alsa-lib.x86_64 libxml2.i686 libxml2.x86_64 libedit.x86_64 libedit.i686 libXi.x86_64 libXi.i686 gtk-murrine-engine.x86_64 gtk-murrine-engine.i686 libnsl.i686 libnsl.x86_64 libpng12.x86_64 libpng12.i686
+sudo dpkg --add-architecture i386
+sudo apt-get update
+sudo apt-get install -y build-essential \
+    libc6:i386 libncurses5:i386 libstdc++6:i386 zlib1g:i386 \
+    libx11-6:i386 libx11-dev libxext6:i386 libxext-dev \
+    libxft2:i386 libxft-dev libxrender1:i386 libxrender-dev \
+    libxt6:i386 libxt-dev libxtst6:i386 libxtst-dev \
+    libxi6:i386 libxi-dev libxau6:i386 libxau-dev libxdmcp6:i386 libxdmcp-dev \
+    libgtk2.0-0 libgtk2.0-0:i386 unixodbc unixodbc-dev:i386 \
+    libzmq3-dev libncurses5 libncurses5-dev libfreetype6:i386 \
+    alsa-lib:i386 alsa-lib libxml2:i386 libxml2 libedit-dev libedit-dev:i386 \
+    libnsl-dev libnsl2:i386 libpng12-0 libpng-dev fonts-dejavu-core \
+    sudo curl wget
 
-echo "This file must exist" > /tmp/bitrock_installer.log
+# -----------------------------
+# Quartus Installation
+# -----------------------------
 echo "Installing Quartus..."
 cd quartus
-echo ./QuartusLiteSetup-17.1.0.590-linux.run --unattendedmodeui none --mode unattended --installdir ${INSTALLDIR} --accept_eula 1
-./QuartusLiteSetup-17.1.0.590-linux.run --unattendedmodeui none --mode unattended --installdir ${INSTALLDIR} --accept_eula 1 &
+chmod +x *.run
+./QuartusLiteSetup-17.1.0.590-linux.run --unattendedmodeui none --mode unattended --installdir "$INSTALLDIR" --accept_eula 1 &
 PID=$!
-tail -F --pid ${PID} /tmp/bitrock_installer_${PID}.log | awk '/Log finished/ {system("kill -9 '$PID'")}' &
-tail -F --pid ${PID} /tmp/bitrock_installer_${PID}.log
-
-echo "Installing Modelsim"
-cd ../modelsim
-echo ./ModelSimSetup-17.1.0.590-linux.run --unattendedmodeui none --mode unattended --installdir ${INSTALLDIR} --accept_eula 1
-./ModelSimSetup-17.1.0.590-linux.run --unattendedmodeui none --mode unattended --installdir ${INSTALLDIR} --accept_eula 1 &
-PID=$!
-tail -F --pid ${PID} /tmp/bitrock_installer_${PID}.log | awk '/Log finished/ {system("kill -9 '$PID'")}' &
-tail -F --pid ${PID} /tmp/bitrock_installer_${PID}.log
-
+wait $PID
 cd ..
-echo "Adding Quartus to PATH"
-echo "export PATH=\$PATH:${INSTALLDIR}/quartus/bin" > /etc/profile.d/quartus.sh
-chmod +x /etc/profile.d/quartus.sh
 
-echo "Adding Quartus to Applications Menu"
-sed 's|<INSTALLDIR>|'${INSTALLDIR}'|g' quartus.desktop > /usr/share/applications/quartus.desktop
+# -----------------------------
+# ModelSim Installation
+# -----------------------------
+echo "Installing ModelSim..."
+cd modelsim
+chmod +x *.run
+./ModelSimSetup-17.1.0.590-linux.run --unattendedmodeui none --mode unattended --installdir "$INSTALLDIR" --accept_eula 1 &
+PID=$!
+wait $PID
+cd ..
 
-echo "Fixing USB permissions"
-cp 51-altera-usb-blaster.rules /etc/udev/rules.d/51-altera-usb-blaster.rules
-udevadm control --reload
+# -----------------------------
+# Configurar PATH do Quartus
+# -----------------------------
+echo "Adding Quartus to PATH..."
+echo "export PATH=\$PATH:$INSTALLDIR/quartus/bin" | sudo tee /etc/profile.d/quartus.sh
+sudo chmod +x /etc/profile.d/quartus.sh
 
-echo "Fix ModelSim kernel compatibility"
-sed -i '210s/linux_rh60/linux/g' ${INSTALLDIR}/modelsim_ase/vco
+# -----------------------------
+# Menu de Aplicativos
+# -----------------------------
+echo "Adding Quartus to Applications Menu..."
+sudo sed 's|<INSTALLDIR>|'"$INSTALLDIR"'|g' quartus.desktop | sudo tee /usr/share/applications/quartus.desktop
 
-echo "Fix Fonts"
-mkdir -p ${INSTALLDIR}/modelsim_ase/fixfonts
-cp -r fixfonts/* ${INSTALLDIR}/modelsim_ase/fixfonts/
-sed -i '51iexport LD_LIBRARY_PATH='${INSTALLDIR}'/modelsim_ase/fixfonts' ${INSTALLDIR}/modelsim_ase/vco
-sed -i '16iexport LD_LIBRARY_PATH='${INSTALLDIR}'/modelsim_ase/fixfonts' ${INSTALLDIR}/quartus/adm/qenv.sh
-sed -i '52iexport FONTCONFIG_FILE='${INSTALLDIR}'/modelsim_ase/fixfonts/fonts/fonts.conf' ${INSTALLDIR}/modelsim_ase/vco
-sed -i '17iexport FONTCONFIG_FILE='${INSTALLDIR}'/modelsim_ase/fixfonts/fonts/fonts.conf' ${INSTALLDIR}/quartus/adm/qenv.sh
+# -----------------------------
+# USB Blaster rules
+# -----------------------------
+echo "Fixing USB permissions..."
+sudo cp 51-altera-usb-blaster.rules /etc/udev/rules.d/
+sudo udevadm control --reload
+sudo udevadm trigger
 
+# -----------------------------
+# ModelSim kernel compatibility
+# -----------------------------
+echo "Fixing ModelSim kernel compatibility..."
+sudo sed -i '210s/linux_rh60/linux/g' "$INSTALLDIR/modelsim_ase/vco"
 
-echo "Installation completed"
+# -----------------------------
+# Fix Fonts
+# -----------------------------
+echo "Fixing fonts for ModelSim..."
+mkdir -p "$INSTALLDIR/modelsim_ase/fixfonts"
+cp -r fixfonts/* "$INSTALLDIR/modelsim_ase/fixfonts/"
+
+sed -i '51iexport LD_LIBRARY_PATH='"$INSTALLDIR"'/modelsim_ase/fixfonts' "$INSTALLDIR/modelsim_ase/vco"
+sed -i '16iexport LD_LIBRARY_PATH='"$INSTALLDIR"'/modelsim_ase/fixfonts' "$INSTALLDIR/quartus/adm/qenv.sh"
+sed -i '52iexport FONTCONFIG_FILE='"$INSTALLDIR"'/modelsim_ase/fixfonts/fonts/fonts.conf' "$INSTALLDIR/modelsim_ase/vco"
+sed -i '17iexport FONTCONFIG_FILE='"$INSTALLDIR"'/modelsim_ase/fixfonts/fonts/fonts.conf' "$INSTALLDIR/quartus/adm/qenv.sh"
+
+echo "======================================="
+echo "Intel FPGA Quartus Prime 17.1 Installed!"
+echo "Installation directory: $INSTALLDIR"
+echo "Please restart your shell or run 'source /etc/profile.d/quartus.sh'"
+echo "======================================="
