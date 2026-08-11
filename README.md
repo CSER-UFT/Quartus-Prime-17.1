@@ -1,103 +1,127 @@
-# Script de instalaÁ„o do Intel FPGA Quartus Prime 17.1 no Ubuntu 16.04 LTS
+# Quartus II 13.0sp1 em Docker ‚Äî DE1 (Cyclone II)
 
-Este repositÛrio **n„o contÈm o software Quartus**, que deve ser baixado diretamente do site da Intel. Ele fornece apenas um **script de instalaÁ„o facilitada** para sistemas Ubuntu 16.04 LTS.
+Ambiente Docker, somente CLI (sem GUI), para compilar, simular e gravar
+projetos VHDL na placa Terasic DE1 (Cyclone II EP2C20F484C7) usando
+Quartus II 13.0sp1 Web Edition + ModelSim.
 
-O script instala o **Quartus Prime vers„o 17.1** e o **ModelSim Intel FPGA Edition** em uma instalaÁ„o limpa do Ubuntu 16.04. Ele pode servir de base para outras versıes do Ubuntu ou cen·rios diferentes, mas **n„o h· garantias de funcionamento completo** fora do Ubuntu 16.04.
+A imagem roda em Ubuntu 20.04 (base do container) e funciona em qualquer
+host Linux com Docker, independente da vers√£o do Ubuntu do host (testado
+com host Ubuntu 22.04).
 
----
+## Pr√©-requisitos: baixar os instaladores (n√£o inclu√≠dos neste reposit√≥rio)
 
-## Download do Quartus
+Os instaladores da Intel/Altera s√£o grandes e propriet√°rios ‚Äî n√£o podem
+ser redistribu√≠dos aqui. Baixe manualmente em:
 
-Use o link oficial da Intel:  
-[Quartus Prime 17.1 Linux](https://www.intel.com/content/www/us/en/software-kit/669392/intel-quartus-prime-standard-edition-design-software-version-17-1-for-linux.html)
+https://www.altera.com/downloads/fpga-development-tools/quartus-ii-web-edition-design-software-version-13-0sp1-linux
 
-**Passos para download:**
+Baixe estes tr√™s arquivos e coloque na **raiz deste reposit√≥rio** (mesmo
+n√≠vel do `Dockerfile`):
 
-1. Se ainda n„o tiver uma conta Intel, crie uma no site da Intel.
-2. Acesse o link acima e selecione **Linux** como plataforma.
-3. Escolha a aba de **Individual Files** ou arquivos individuais.
-4. FaÁa o download dos arquivos:
-   - QuartusPrime 17.1 (**QuartusLiteSetup-17.1.0.590-linux.run**)  
-   - Suporte para dispositivos (ex.: **cyclonev-17.1.0.590.qdz**)  
-   - ModelSim Intel FPGA Edition (**ModelSimSetup-17.1.0.590-linux.run**)  
-5. Salve o instalador do Quartus na pasta `Altera/quartus`.  
-6. Salve o instalador do ModelSim na pasta `Altera/modelsim`.
+- `QuartusSetupWeb-13.0.1.232.run` (Quartus II Software) ‚Äî 1.6 GB
+- `cyclone_web-13.0.1.232.qdz` (Cyclone II/III/IV Device Support) ‚Äî 569 MB
+- `ModelSimSetup-13.1.0.162.run` (ModelSim-Edition) ‚Äî ~776 MB
 
-> **ObservaÁ„o:** a pasta `Altera/` tambÈm contÈm arquivos de suporte essenciais:
-> - `51-altera-usb-blaster.rules` ? regras de permiss„o para placas DE1.  
-> - `fixfonts/` ? fontes para corrigir problemas no ModelSim.  
-> - `quartus.desktop` ? atalho no menu de aplicativos.  
-
----
-
-## InstalaÁ„o
-
-Execute o script como administrador:
+## Setup (uma vez por m√°quina)
 
 ```bash
-sudo ./setup_altera.sh
+sudo bash install_docker.sh              # instala o Docker
+sudo bash install_usb_blaster_udev.sh    # permiss√£o USB para o USB-Blaster
+docker build -t quartus13-cli:latest .   # builda a imagem (demorado na 1a vez)
 ```
 
-O script far· automaticamente:
+O build demora bastante na primeira vez ‚Äî o instalador do Quartus trava
+ao final mesmo j√° tendo terminado (bug conhecido dessa vers√£o), ent√£o o
+Dockerfile usa um timeout de 30 min por instalador antes de seguir em
+frente. Rebuilds seguintes reaproveitam cache e s√£o r√°pidos.
 
-- InstalaÁ„o de dependÍncias (32 e 64 bits) essenciais para Quartus e ModelSim  
-- InstalaÁ„o do Quartus Prime 17.1  
-- InstalaÁ„o do ModelSim Intel FPGA Edition  
-- ConfiguraÁ„o do **PATH** (`/etc/profile.d/quartus.sh`)  
-- CriaÁ„o de **atalho no menu de aplicativos**  
-- ConfiguraÁ„o de **permissıes USB** para placas FPGA  
-- AplicaÁ„o de **correÁıes de fontes** para ModelSim  
+## Uso (toda sess√£o)
 
----
-
-## ObservaÁıes sobre dependÍncias
-
-O script instala dependÍncias essenciais para Ubuntu 16.04.  
-
-Em alguns casos, pode haver **conflitos ou bibliotecas ausentes**, causando falha na inicializaÁ„o. Se isso ocorrer:
-
-1. Inicie o Quartus ou ModelSim via terminal:
+Com a placa DE1 conectada via USB:
 
 ```bash
-quartus &
-# ou
-vsim &
+./run_quartus.sh
 ```
 
-2. O terminal exibir· mensagens de bibliotecas faltantes.
-3. Instale manualmente os pacotes ausentes usando:
+Isso abre um shell dentro do container, com a pasta `projetos/` do host
+montada em `~/projetos` (usada pra persistir os arquivos entre sess√µes,
+j√° que o container √© descart√°vel ‚Äî o exemplo `and_gate` j√° vem dentro
+dela, e seus pr√≥prios projetos podem ficar em pastas irm√£s, ex:
+`projetos/meu_projeto/`).
+
+## Fluxo de um projeto
+
+Dentro do container:
 
 ```bash
-sudo apt-get install <pacote>
+cd projetos/and_gate          # ou sua pasta de projeto
+quartus_sh -t compile.tcl     # compila -> gera output_files/*.sof
+vsim -c -do sim.do            # simula -> gera *.vcd
+jtagconfig                    # confirma que a DE1 est√° vis√≠vel
+quartus_pgm -c "USB-Blaster" -m jtag -o "p;output_files/and_gate.sof"
 ```
 
-## Etapas de instalaÁ„o implementadas no script
+Pra visualizar a forma de onda gerada (`.vcd`), veja a se√ß√£o
+"Visualizando a simula√ß√£o (GTKWave)" abaixo.
 
-| Etapa | Linha(s) | DescriÁ„o |
-|-------|----------|-----------|
-| SeleÁ„o do diretÛrio de instalaÁ„o | 3-9 | Define diretÛrio padr„o `/opt/altera/17.1` ou permite diretÛrio customizado |
-| InstalaÁ„o de dependÍncias | 17-26 | Instala pacotes necess·rios (32-bit e 64-bit) no Ubuntu 16.04 |
-| InstalaÁ„o do Quartus e suporte Cyclone V | 28-34 | Executa instalador do Quartus, aplicando correÁıes finais |
-| InstalaÁ„o do ModelSim | 36-42 | Executa instalador do ModelSim, aplicando correÁıes finais |
-| ConfiguraÁ„o do PATH do Quartus | 44-47 | Cria script em `/etc/profile.d/quartus.sh` |
-| CriaÁ„o do menu de aplicativos | 49-50 | Cria atalho em `/usr/share/applications/quartus.desktop` |
-| ConfiguraÁ„o de permissıes USB | 52-54 | Permite uso do USB-Blaster por usu·rios n„o-root |
-| CorreÁ„o de compatibilidade do ModelSim | 56-57 | Ajuste de kernel e bibliotecas para execuÁ„o correta |
-| CorreÁ„o de fontes do ModelSim | 59-66 | Instala fontes e ajusta `LD_LIBRARY_PATH` e `FONTCONFIG_FILE` |
+## Visualizando a simula√ß√£o (GTKWave)
 
----
+O `vsim -c -do sim.do` gera um arquivo `.vcd` (Value Change Dump) ‚Äî um
+formato de forma de onda padr√£o e em texto, aberto por qualquer
+visualizador. Recomendamos o **GTKWave**: leve, moderno, sem nenhum dos
+problemas de renderiza√ß√£o que a GUI antiga do Quartus/ModelSim tem.
 
-## Resultado esperado
-
-ApÛs a execuÁ„o do script:
-
-- Quartus Prime 17.1 e ModelSim est„o instalados e configurados no Ubuntu 16.04.  
-- Placas FPGA (DE1/DE1-SoC) podem ser programadas sem sudo.  
-- Menu de aplicativos contÈm atalho para Quartus.  
-- Problemas de fontes no ModelSim s„o corrigidos automaticamente.  
-
-> **RecomendaÁ„o:** reinicie o shell ou execute:
+**Instala√ß√£o (uma vez, na m√°quina local ‚Äî fora do container):**
 
 ```bash
-source /etc/profile.d/quartus.sh
+sudo apt install gtkwave
 ```
+
+**Uso, depois de rodar a simula√ß√£o:**
+
+```bash
+gtkwave projetos/and_gate/and_gate.vcd
+```
+
+Dentro do GTKWave:
+
+1. No painel esquerdo (SST), clique na hierarquia do design
+   (`tb_and_gate` ‚Üí `uut`) pra ver os sinais dispon√≠veis no painel do
+   meio.
+2. Selecione os sinais que quer ver (`sw0`, `sw1`, `ledr0`) e clique em
+   **Insert** (ou arraste) pro painel de ondas √† direita.
+3. Use os √≠cones de zoom na barra de ferramentas (ou `Ctrl` + scroll do
+   mouse) pra ajustar a escala de tempo e ver as 4 combina√ß√µes de
+   `SW0`/`SW1` que o testbench percorre.
+
+## Exemplo inclu√≠do: `projetos/and_gate/`
+
+Porta AND simples ‚Äî `SW0` e `SW1` como entradas, `LEDR0` como sa√≠da.
+Pinos j√° mapeados pra DE1 (Cyclone II EP2C20F484C7):
+
+| Sinal | Pino |
+|---|---|
+| SW0 | PIN_L22 |
+| SW1 | PIN_L21 |
+| LEDR0 | PIN_R20 |
+
+- `and_gate.vhd` ‚Äî o design
+- `tb_and_gate.vhd` ‚Äî testbench
+- `compile.tcl` ‚Äî script de compila√ß√£o (quartus_sh)
+- `sim.do` ‚Äî script de simula√ß√£o (ModelSim, gera `.vcd`)
+
+## Por que essa vers√£o do Quartus?
+
+Quartus **Prime** (14.0+) n√£o suporta mais a fam√≠lia Cyclone II ‚Äî a
+√∫ltima vers√£o com suporte √© o Quartus **II** 13.0sp1. Se voc√™ tem uma
+DE1-SoC (Cyclone V) em vez da DE1 cl√°ssica (Cyclone II), pode usar
+Quartus Prime normalmente e n√£o precisa deste setup.
+
+## Por que CLI e n√£o GUI?
+
+A GUI do Quartus 13.0sp1/17.1 √© Java Swing antigo e, rodando dentro de
+container (via X11 forwarding ou VNC), esbarra em uma cadeia de bugs de
+renderiza√ß√£o (tela em branco, travamentos) sem solu√ß√£o est√°vel. As
+ferramentas de linha de comando (`quartus_sh`, `quartus_map`,
+`quartus_fit`, `quartus_asm`, `quartus_pgm`, `vsim`) n√£o t√™m esse
+problema ‚Äî mesmo fluxo de compila√ß√£o/simula√ß√£o/grava√ß√£o, sem GUI.

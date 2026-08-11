@@ -1,0 +1,13 @@
+# Instaladores da Intel/Altera — baixe manualmente (veja README.md)
+# Não versionar: são grandes e proprietários
+*.run
+*.qdz
+
+# Saída de compilação/simulação do Quartus/ModelSim
+projetos/*/output_files/
+projetos/*/db/
+projetos/*/incremental_db/
+projetos/*/*.qws
+work/
+*.vcd
+transcript
