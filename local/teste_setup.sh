@@ -27,7 +27,7 @@ docker run --rm "$IMAGE_NAME" bash -c "
 
 echo ""
 echo "=== [3/3] Compilando e simulando o exemplo and_gate ==="
-docker run --rm -v "$(pwd)/projetos:/home/student/projetos" "$IMAGE_NAME" bash -c "
+docker run --rm -v "$(pwd)/../projetos:/home/student/projetos" "$IMAGE_NAME" bash -c "
   set -e
   source /etc/profile.d/quartus.sh
   cd and_gate
@@ -42,5 +42,5 @@ echo ""
 echo "=================================================="
 echo "Setup validado com sucesso."
 echo "Para gravar na placa de verdade (DE1 conectada via USB):"
-echo "  ./run_quartus.sh"
+echo "  cd .. && ./run_quartus.sh"
 echo "=================================================="

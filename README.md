@@ -8,25 +8,106 @@ A imagem roda em Ubuntu 20.04 (base do container) e funciona em qualquer
 host Linux com Docker, independente da versão do Ubuntu do host (testado
 com host Ubuntu 22.04).
 
-## Pré-requisitos: baixar os instaladores (não incluídos neste repositório)
+## Estrutura do repositório
+
+```
+.
+├── README.md
+├── .gitignore
+├── install_docker.sh              # usado nos dois casos (máquina local E servidor)
+├── install_usb_blaster_udev.sh    # usado independente do caminho (pull ou build)
+├── 51-altera-usb-blaster.rules
+├── run_quartus.sh                 # usado independente do caminho (pull ou build)
+├── projetos/
+│   └── and_gate/
+├── local/                  # específico de cada caminho (build ou pull)
+│   ├── Dockerfile
+│   └── teste_setup.sh
+└── sarue/                  # só roda no servidor (registry privado)
+    ├── registry_setup.sh
+    ├── pull_image.sh
+    └── registry_trust.sh
+```
+
+## Duas formas de usar
+
+Existem dois caminhos independentes — escolha um:
+
+- **Pull (recomendado para alunos)**: baixa a imagem já pronta do
+  registry privado hospedado no servidor `sarue` (172.16.13.190). Não
+  precisa baixar os instaladores da Intel nem esperar o build (~30-60
+  min). É o caminho normal do dia a dia.
+- **Build local (para quem for modificar o `Dockerfile`, ou não tiver
+  acesso ao registry)**: builda a imagem do zero, a partir dos
+  instaladores da Intel/Altera baixados manualmente.
+
+---
+
+## Caminho 1: Pull da imagem pronta (via servidor sarue)
+
+**Uma vez por máquina do laboratório** (precisa de admin/sudo):
+```bash
+sudo ./install_docker.sh
+sudo ./install_usb_blaster_udev.sh
+sudo ./sarue/registry_trust.sh 172.16.13.190:5000
+```
+
+**Por aluno/sessão:**
+```bash
+./sarue/pull_image.sh 172.16.13.190:5000   # login + pull + tag local
+./run_quartus.sh
+```
+
+Peça o usuário/senha de acesso ao registry ao professor — não estão
+neste repositório (só o IP é público; a rede da UFT não tem acesso
+externo, então não há risco em publicá-lo, mas a senha do registry
+continua fora do git).
+
+### Publicando/atualizando a imagem no registry (só o professor)
+
+No servidor `sarue`, uma vez, sobe o registry:
+```bash
+./sarue/registry_setup.sh
+```
+
+Depois de buildar a imagem localmente (veja "Caminho 2" abaixo), publica
+a partir da máquina que buildou:
+```bash
+docker tag quartus13-cli:latest 172.16.13.190:5000/quartus13-cli:latest
+docker login 172.16.13.190:5000
+docker push 172.16.13.190:5000/quartus13-cli:latest
+```
+
+> Usamos um registry auto-hospedado (não Docker Hub) porque o plano
+> gratuito do Docker Hub limita repositórios privados a ~2GB, e essa
+> imagem tem mais de 6GB — além de evitar redistribuir publicamente os
+> binários da Intel/Altera, que são proprietários mesmo na edição
+> gratuita.
+
+---
+
+## Caminho 2: Build local a partir do código-fonte
+
+### Pré-requisitos: baixar os instaladores (não incluídos neste repositório)
 
 Os instaladores da Intel/Altera são grandes e proprietários — não podem
 ser redistribuídos aqui. Baixe manualmente em:
 
 https://www.altera.com/downloads/fpga-development-tools/quartus-ii-web-edition-design-software-version-13-0sp1-linux
 
-Baixe estes três arquivos e coloque na **raiz deste repositório** (mesmo
-nível do `Dockerfile`):
+Baixe estes três arquivos e coloque dentro de `local/` (mesmo nível do
+`Dockerfile`):
 
 - `QuartusSetupWeb-13.0.1.232.run` (Quartus II Software) — 1.6 GB
 - `cyclone_web-13.0.1.232.qdz` (Cyclone II/III/IV Device Support) — 569 MB
 - `ModelSimSetup-13.1.0.162.run` (ModelSim-Edition) — ~776 MB
 
-## Setup (uma vez por máquina)
+### Setup (uma vez por máquina)
 
 ```bash
-sudo bash install_docker.sh              # instala o Docker
-sudo bash install_usb_blaster_udev.sh    # permissão USB para o USB-Blaster
+sudo ./install_docker.sh
+sudo ./install_usb_blaster_udev.sh
+cd local
 docker build -t quartus13-cli:latest .   # builda a imagem (demorado na 1a vez)
 ```
 
@@ -35,9 +116,14 @@ ao final mesmo já tendo terminado (bug conhecido dessa versão), então o
 Dockerfile usa um timeout de 30 min por instalador antes de seguir em
 frente. Rebuilds seguintes reaproveitam cache e são rápidos.
 
-## Uso (toda sessão)
+Pra validar o setup do zero (build + compilação + simulação
+automatizadas), use `local/teste_setup.sh` (rodar de dentro de `local/`).
 
-Com a placa DE1 conectada via USB:
+---
+
+## Uso (toda sessão, qualquer um dos dois caminhos)
+
+Com a placa DE1 conectada via USB, a partir da raiz do repositório:
 
 ```bash
 ./run_quartus.sh
@@ -58,7 +144,7 @@ cd projetos/and_gate          # ou sua pasta de projeto
 quartus_sh -t compile.tcl     # compila -> gera output_files/*.sof
 vsim -c -do sim.do            # simula -> gera *.vcd
 jtagconfig                    # confirma que a DE1 está visível
-quartus_pgm -c "USB-Blaster" -m jtag -o "p;output_files/and_gate.sof"
+quartus_pgm -c "USB-Blaster" -m jtag -o "p;and_gate/and_gate.sof"
 ```
 
 Pra visualizar a forma de onda gerada (`.vcd`), veja a seção
